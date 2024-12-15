@@ -4,15 +4,15 @@
 // The macro for our start-up function
 use rp_pico::entry;
 
-use rp_pico::hal::pac;
-
 use rp_pico::hal;
 
-use rp2040_hal::{gpio::Pins, Sio};
-
-use embedded_hal::{delay::DelayNs, digital::*};
-
-use panic_halt;
+use fugit::RateExtU32;
+use panic_halt as _;
+use rp2040_hal::{
+    pac,
+    uart::{DataBits, StopBits, UartConfig, UartPeripheral},
+    Clock, Sio,
+};
 
 /// Entry point to our bare-metal application.
 ///
@@ -51,19 +51,18 @@ fn main() -> ! {
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
+    // let uart_config = UartConfig::new();
+    // Set up UART on GP0 and GP1 (Pico pins 1 and 2)
+    let pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
+    // Need to perform clock init before using UART or it will freeze.
+    let uart = UartPeripheral::new(pac.UART0, pins, &mut pac.RESETS)
+        .enable(
+            UartConfig::new(55.Hz(), DataBits::Eight, None, StopBits::One),
+            clocks.peripheral_clock.freq(),
+        )
+        .unwrap();
 
-    let mut led = pins.gpio25.into_push_pull_output();
-    let mut serial = pins.gpio0.into_pull_up_input();
+    uart.write_full_blocking(b"Hello World!\r\n");
 
-    let mut timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
-    loop {
-        if serial.is_high().unwrap() {
-            led.set_high().unwrap();
-        } else {
-            led.set_low().unwrap();
-        }
-        timer.delay_ms(50);
-    }
+    loop {}
 }
-
-// End of file
