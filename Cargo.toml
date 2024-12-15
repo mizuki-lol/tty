@@ -1,0 +1,14 @@
+[package]
+name = "tty"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cortex-m-rt = "0.7.5"
+embedded-hal = "1.0.0"
+heapless = "0.8.0"
+panic-halt = "1.0.0"
+rp-pico = "0.9.0"
+rp2040-hal = "0.10.2"
+usb-device = "0.3.2"
+usbd-serial = "0.2.2"
