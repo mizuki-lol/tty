@@ -1,11 +1,6 @@
 #![no_std]
 #![no_main]
 
-// The macro for our start-up function
-use rp_pico::entry;
-
-use rp_pico::hal;
-
 use fugit::RateExtU32;
 use panic_halt as _;
 use rp2040_hal::{
@@ -13,25 +8,12 @@ use rp2040_hal::{
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
     Clock, Sio,
 };
+use rp_pico::{entry, hal};
 
-/// Entry point to our bare-metal application.
-///
-/// The `#[entry]` macro ensures the Cortex-M start-up code calls this function
-/// as soon as all global variables are initialised.
-///
-/// The function configures the RP2040 peripherals, then echoes any characters
-/// received over USB Serial.
 #[entry]
 fn main() -> ! {
-    // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
-
-    // Set up the watchdog driver - needed by the clock setup code
     let mut watchdog = hal::Watchdog::new(pac.WATCHDOG);
-
-    // Configure the clocks
-    //
-    // The default is to generate a 125 MHz system clock
     let clocks = hal::clocks::init_clocks_and_plls(
         rp_pico::XOSC_CRYSTAL_FREQ,
         pac.XOSC,
@@ -43,7 +25,6 @@ fn main() -> ! {
     )
     .ok()
     .unwrap();
-
     let sio = Sio::new(pac.SIO);
     let pins = rp2040_hal::gpio::Pins::new(
         pac.IO_BANK0,
@@ -51,18 +32,46 @@ fn main() -> ! {
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
-    // let uart_config = UartConfig::new();
-    // Set up UART on GP0 and GP1 (Pico pins 1 and 2)
     let pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
-    // Need to perform clock init before using UART or it will freeze.
     let uart = UartPeripheral::new(pac.UART0, pins, &mut pac.RESETS)
         .enable(
-            UartConfig::new(55.Hz(), DataBits::Eight, None, StopBits::One),
+            UartConfig::new(300.Hz(), DataBits::Eight, None, StopBits::One),
             clocks.peripheral_clock.freq(),
         )
         .unwrap();
 
     uart.write_full_blocking(b"Hello World!\r\n");
 
-    loop {}
+    loop {
+        let mut buf = [0; 32]; // this is enough to hold the entire pico uart read buffer
+        let nread = match uart.read_raw(&mut buf) {
+            Ok(0) => continue, // continue on empty reads
+            Ok(n) => n,
+            Err(_) => continue, // silently continue on errors, (maybe fixme)
+        };
+        let (local_echo, len) = translate(buf, nread);
+        uart.write_full_blocking(&local_echo[..len]);
+    }
+}
+
+fn translate(string: [u8; 32], strlen: usize) -> ([u8; 64], usize) {
+    let mut output = [0; 64];
+    let mut offset = 0;
+    for (idx, c) in string[..strlen].iter().enumerate() {
+        match c {
+            b'\n' | b'\r' => {
+                if idx >= 1
+                    && (string[idx - 1] == b'\r' && *c == b'\n'
+                        || string[idx - 1] == b'\n' && *c == b'\r')
+                {
+                    continue;
+                }
+                output[idx + offset] = b'\r';
+                offset += 1;
+                output[idx + offset] = b'\n';
+            }
+            c => output[idx + offset] = *c,
+        }
+    }
+    (output, strlen + offset)
 }
