@@ -1,13 +1,13 @@
 #![no_std]
 #![no_main]
 
-use fugit::RateExtU32;
 use panic_halt as _;
 use rp2040_hal::{
     pac,
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
     Clock, Sio,
 };
+use rp_pico::hal::fugit::RateExtU32;
 use rp_pico::{entry, hal};
 
 #[entry]
