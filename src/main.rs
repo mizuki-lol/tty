@@ -1,13 +1,17 @@
 #![no_std]
 #![no_main]
 
+mod baudot;
+
+use embedded_hal::digital::{InputPin, OutputPin};
 use panic_halt as _;
 use rp2040_hal::{
     pac,
+    timer::Alarm,
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
-    Clock, Sio,
+    Clock, Sio, Timer,
 };
-use rp_pico::hal::fugit::RateExtU32;
+use rp_pico::hal::fugit::{ExtU32, RateExtU32};
 use rp_pico::{entry, hal};
 
 #[entry]
@@ -32,8 +36,13 @@ fn main() -> ! {
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
-    let pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
-    let uart = UartPeripheral::new(pac.UART0, pins, &mut pac.RESETS)
+
+    let uart_pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
+    let mut current_loop_write = pins.gpio15.into_push_pull_output();
+    let mut current_loop_read = pins.gpio9.into_pull_down_input();
+    let mut led = pins.gpio25.into_push_pull_output();
+
+    let uart = UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
         .enable(
             UartConfig::new(300.Hz(), DataBits::Eight, None, StopBits::One),
             clocks.peripheral_clock.freq(),
@@ -42,7 +51,23 @@ fn main() -> ! {
 
     uart.write_full_blocking(b"Hello World!\r\n");
 
+    current_loop_write.set_high().unwrap();
+
+    // let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    // let mut alarm = timer.alarm_0().unwrap();
+    // alarm.disable_interrupt();
+    // alarm.schedule(250.millis()).unwrap();
     loop {
+        // if alarm.finished() {
+        if current_loop_read.is_high().unwrap() {
+            led.set_high().unwrap();
+            // current_loop_write.set_low().unwrap();
+        } else {
+            led.set_low().unwrap();
+            // current_loop_write.set_high().unwrap();
+        }
+        // alarm.schedule(250.millis()).unwrap();
+        // }
         let mut buf = [0; 32]; // this is enough to hold the entire pico uart read buffer
         let nread = match uart.read_raw(&mut buf) {
             Ok(0) => continue, // continue on empty reads
