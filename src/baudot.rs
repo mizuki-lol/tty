@@ -346,7 +346,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         }
     }
 
-    pub fn poll_read(&mut self) -> Option<u8> {
+    pub fn poll_read(&mut self) -> (bool, Option<u8>) {
         let state = self.input.is_high().unwrap();
         self.read_buf |= (state as u8) << 4 - self.read_buf_len;
         self.read_buf_len += 1;
@@ -355,9 +355,9 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             if char.1 != BaudotShift::Keep {
                 self.current_shift = char.1;
             }
-            return Some(char.0);
+            return (state, Some(char.0));
         }
-        None
+        (state, None)
     }
 
     pub fn poll_write(&mut self) {

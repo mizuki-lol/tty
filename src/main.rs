@@ -1,9 +1,12 @@
 #![no_std]
 #![no_main]
 
+const BAUD_RATE: Rate<u32, 1, 1> = Rate::<u32, 1, 1>::Hz(50);
+
 mod baudot;
 
-use embedded_hal::digital::{InputPin, OutputPin};
+use baudot::BaudotStream;
+use embedded_hal::digital::OutputPin;
 use panic_halt as _;
 use rp2040_hal::{
     pac,
@@ -11,7 +14,7 @@ use rp2040_hal::{
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
     Clock, Sio, Timer,
 };
-use rp_pico::hal::fugit::{ExtU32, RateExtU32};
+use rp_pico::hal::fugit::{ExtU32, Rate, RateExtU32};
 use rp_pico::{entry, hal};
 
 #[entry]
@@ -39,7 +42,7 @@ fn main() -> ! {
 
     let uart_pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
     let mut current_loop_write = pins.gpio15.into_push_pull_output();
-    let mut current_loop_read = pins.gpio9.into_pull_down_input();
+    let current_loop_read = pins.gpio9.into_pull_down_input();
     let mut led = pins.gpio25.into_push_pull_output();
 
     let uart = UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
@@ -53,29 +56,33 @@ fn main() -> ! {
 
     current_loop_write.set_high().unwrap();
 
-    // let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
-    // let mut alarm = timer.alarm_0().unwrap();
-    // alarm.disable_interrupt();
-    // alarm.schedule(250.millis()).unwrap();
+    let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    let mut alarm = timer.alarm_0().unwrap();
+    alarm.disable_interrupt();
+    alarm.schedule(1.millis()).unwrap();
+
+    let mut stream = BaudotStream::new(current_loop_read, current_loop_write);
+
     loop {
-        // if alarm.finished() {
-        if current_loop_read.is_high().unwrap() {
-            led.set_high().unwrap();
-            // current_loop_write.set_low().unwrap();
-        } else {
-            led.set_low().unwrap();
-            // current_loop_write.set_high().unwrap();
+        if alarm.finished() {
+            alarm.schedule(BAUD_RATE.into_duration()).unwrap();
+            stream.poll_write();
+            let (current_loop_state, read) = stream.poll_read();
+            led.set_state(current_loop_state.into()).unwrap();
+            if let Some(read) = read {
+                _ = uart.write_raw(&[read]); // don't handle errors
+            }
         }
-        // alarm.schedule(250.millis()).unwrap();
-        // }
         let mut buf = [0; 32]; // this is enough to hold the entire pico uart read buffer
         let nread = match uart.read_raw(&mut buf) {
             Ok(0) => continue, // continue on empty reads
             Ok(n) => n,
             Err(_) => continue, // silently continue on errors, (maybe fixme)
         };
-        let (local_echo, len) = translate(buf, nread);
-        uart.write_full_blocking(&local_echo[..len]);
+        let (str, len) = translate(buf, nread);
+        for i in 0..len {
+            stream.queue_write(str[i]);
+        }
     }
 }
 
