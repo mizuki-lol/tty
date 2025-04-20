@@ -1,14 +1,13 @@
 #![no_std]
 #![no_main]
 
-const BAUD_RATE: Rate<u32, 1, 1> = Rate::<u32, 1, 1>::Hz(50);
-
 mod baudot;
 
 use baudot::BaudotStream;
 use embedded_hal::digital::OutputPin;
 use panic_halt as _;
 use rp2040_hal::{
+    fugit::MicrosDurationU32,
     pac,
     timer::Alarm,
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
@@ -16,12 +15,6 @@ use rp2040_hal::{
 };
 use rp_pico::hal::fugit::{ExtU32, Rate, RateExtU32};
 use rp_pico::{entry, hal};
-
-enum LineState {
-    Empty,
-    Writing,
-    Reading,
-}
 
 #[entry]
 fn main() -> ! {
@@ -71,13 +64,19 @@ fn main() -> ! {
 
     loop {
         if alarm.finished() {
-            alarm.schedule(BAUD_RATE.into_duration()).unwrap();
-            stream.poll_write();
-            let (current_loop_state, read) = stream.poll_read();
+            let schedule1 = stream.poll_write();
+            let (current_loop_state, read, schedule2) = stream.poll_read();
             _ = led.set_state(current_loop_state.into());
             if let Some(read) = read {
                 _ = uart.write_raw(&[read]);
             }
+            alarm
+                .schedule(match (schedule1, schedule2) {
+                    (Some(s1), Some(s2)) => s1.max(s2),
+                    (Some(s), None) | (None, Some(s)) => s,
+                    (None, None) => MicrosDurationU32::millis(1),
+                })
+                .unwrap();
         }
         let mut buf = [0; 32]; // this is enough to hold the entire pico uart read buffer
         let nread = match uart.read_raw(&mut buf) {

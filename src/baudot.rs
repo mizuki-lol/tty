@@ -1,7 +1,13 @@
 use embedded_hal::digital::{InputPin, OutputPin};
-use rp2040_hal::gpio::{FunctionSioInput, FunctionSioOutput, Pin, PinId, PullDown};
+use rp2040_hal::{
+    fugit::MicrosDurationU32,
+    gpio::{FunctionSioInput, FunctionSioOutput, Pin, PinId, PullDown},
+};
+use LineState::*;
 
 const WRITE_BUF_LENGTH: usize = 1024;
+const BAUD_RATE: MicrosDurationU32 = MicrosDurationU32::millis(22);
+const STOP_BIT_DURATION: MicrosDurationU32 = MicrosDurationU32::millis(32);
 
 const ASCII_TO_BAUDOT: [BaudotChar; 256] = [
     BaudotChar(BaudotShift::Keep, 0),       // null
@@ -318,7 +324,15 @@ impl BaudotChar {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineState {
+    Empty,
+    Writing,
+    Reading,
+}
+
 pub struct BaudotStream<IN: PinId, OUT: PinId> {
+    line_state: LineState,
     current_shift: BaudotShift,
     input: Pin<IN, FunctionSioInput, PullDown>,
     out: Pin<OUT, FunctionSioOutput, PullDown>,
@@ -327,6 +341,7 @@ pub struct BaudotStream<IN: PinId, OUT: PinId> {
     write_buf: [BaudotChar; WRITE_BUF_LENGTH],
     write_buf_char_pos: u8,
     write_buf_len: usize,
+    start_bit_written: bool,
 }
 
 impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
@@ -335,6 +350,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         out: Pin<OUT, FunctionSioOutput, PullDown>,
     ) -> Self {
         Self {
+            line_state: Empty,
             current_shift: BaudotShift::LTRS,
             input,
             out,
@@ -343,11 +359,24 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             write_buf: [BaudotChar(BaudotShift::LTRS, 0); WRITE_BUF_LENGTH],
             write_buf_char_pos: 0,
             write_buf_len: 0,
+            start_bit_written: false,
         }
     }
 
-    pub fn poll_read(&mut self) -> (bool, Option<u8>) {
+    pub fn poll_read(&mut self) -> (bool, Option<u8>, Option<MicrosDurationU32>) {
         let state = self.input.is_high().unwrap();
+        if self.line_state == Empty {
+            // read start bit
+            if state {
+                self.line_state = Reading;
+                return (state, None, Some(BAUD_RATE));
+            } else {
+                return (state, None, None);
+            }
+        } else if self.line_state == Writing && self.start_bit_written {
+            return (state, None, Some(BAUD_RATE));
+        }
+
         self.read_buf |= (state as u8) << 4 - self.read_buf_len;
         self.read_buf_len += 1;
         if self.read_buf_len == 5 {
@@ -355,15 +384,26 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             if char.1 != BaudotShift::Keep {
                 self.current_shift = char.1;
             }
-            return (state, Some(char.0));
+            // multiply BAUD_RATE by 1.42 to account for stop bit
+            return (state, Some(char.0), Some((BAUD_RATE * 142) / 100));
         }
-        (state, None)
+        (state, None, Some(BAUD_RATE))
     }
 
-    pub fn poll_write(&mut self) {
+    pub fn poll_write(&mut self) -> Option<MicrosDurationU32> {
         if self.write_buf_len == 0 {
-            return;
+            _ = self.out.set_low();
+            return None;
         }
+        if self.line_state == Reading {
+            return None;
+        } else if self.line_state == Empty {
+            // write start bit
+            self.line_state = Writing;
+            _ = self.out.set_low();
+            return Some(STOP_BIT_DURATION);
+        }
+        self.start_bit_written = true;
         let c = self.write_buf[0];
         let state = c.1 >> 4 - self.write_buf_char_pos & 1 == 1;
         _ = self.out.set_state(state.into());
@@ -373,6 +413,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             self.write_buf.copy_within(1.., 0);
             self.write_buf_len -= 1;
         }
+        Some(BAUD_RATE)
     }
 
     pub fn queue_write(&mut self, char: u8) {
