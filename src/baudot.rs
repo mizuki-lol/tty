@@ -3,263 +3,263 @@ use rp2040_hal::gpio::{FunctionSioInput, FunctionSioOutput, Pin, PinId, PullDown
 
 const WRITE_BUF_LENGTH: usize = 1024;
 
-const ASCII_TO_BAUDOT: [Option<BaudotChar>; 256] = [
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // null
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // start of heading
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // start of text
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // end of text
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // end of transmision
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // enquiry
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // acknowledge
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // bell
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // backspace
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // tab
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // new line
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // vertical tab
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // form feed
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // carriage return
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // shift out
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // shift in
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // data link escape
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // device control 1
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // device control 2
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // device control 3
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // device control 4
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // negative acknowledge
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // synchronous idle
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // end of transmission
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // cancel
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // end of medium
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // substitute
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // escape
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // file separator
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // group separator
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // record separator
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // unit separator
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // space
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // !
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // "
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // #
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // $
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // %
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // &
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // '
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // (
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // )
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // *
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // +
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // ,
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // -
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // .
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // /
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 0
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 1
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 2
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 3
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 4
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 5
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 6
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 7
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 8
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // 9
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // :
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // ;
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // <
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // =
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // >
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // ?
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // @
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // A
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // B
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // C
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // D
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // E
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // F
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // G
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // H
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // I
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // J
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // K
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // L
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // M
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // N
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // O
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // P
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // Q
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // R
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // S
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // T
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // U
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // V
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // W
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // X
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // Y
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // Z
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // [
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // \
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // ]
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // ^
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // _
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // `
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // a
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // b
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // c
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // d
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // e
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // f
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // g
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // h
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // i
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // j
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // k
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // l
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // m
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // n
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // o
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // p
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // q
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // r
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // s
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // t
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // u
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // v
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // w
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // x
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // y
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // z
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // {
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // |
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // }
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // ~
-    Some(BaudotChar(BaudotShift::LTRS, 0)), // delete
-    None,                                   // --- rest is unused ---
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
+const ASCII_TO_BAUDOT: [BaudotChar; 256] = [
+    BaudotChar(BaudotShift::Keep, 0),       // null
+    BaudotChar(BaudotShift::Keep, 0),       // start of heading
+    BaudotChar(BaudotShift::Keep, 0),       // start of text
+    BaudotChar(BaudotShift::Keep, 0),       // end of text
+    BaudotChar(BaudotShift::Keep, 0),       // end of transmision
+    BaudotChar(BaudotShift::FIGS, 0b10010), // enquiry
+    BaudotChar(BaudotShift::Keep, 0),       // acknowledge
+    BaudotChar(BaudotShift::FIGS, 0b11010), // bell
+    BaudotChar(BaudotShift::Keep, 0),       // backspace
+    BaudotChar(BaudotShift::Keep, 0),       // tab
+    BaudotChar(BaudotShift::Keep, 0b00010), // new line
+    BaudotChar(BaudotShift::Keep, 0),       // vertical tab
+    BaudotChar(BaudotShift::Keep, 0),       // form feed
+    BaudotChar(BaudotShift::Keep, 0b01000), // carriage return
+    BaudotChar(BaudotShift::Keep, 0),       // shift out
+    BaudotChar(BaudotShift::Keep, 0),       // shift in
+    BaudotChar(BaudotShift::Keep, 0),       // data link escape
+    BaudotChar(BaudotShift::Keep, 0),       // device control 1
+    BaudotChar(BaudotShift::Keep, 0),       // device control 2
+    BaudotChar(BaudotShift::Keep, 0),       // device control 3
+    BaudotChar(BaudotShift::Keep, 0),       // device control 4
+    BaudotChar(BaudotShift::Keep, 0),       // negative acknowledge
+    BaudotChar(BaudotShift::Keep, 0),       // synchronous idle
+    BaudotChar(BaudotShift::Keep, 0),       // end of transmission
+    BaudotChar(BaudotShift::Keep, 0),       // cancel
+    BaudotChar(BaudotShift::Keep, 0),       // end of medium
+    BaudotChar(BaudotShift::Keep, 0),       // substitute
+    BaudotChar(BaudotShift::Keep, 0),       // escape
+    BaudotChar(BaudotShift::Keep, 0),       // file separator
+    BaudotChar(BaudotShift::Keep, 0),       // group separator
+    BaudotChar(BaudotShift::Keep, 0),       // record separator
+    BaudotChar(BaudotShift::Keep, 0),       // unit separator
+    BaudotChar(BaudotShift::Keep, 0),       // space
+    BaudotChar(BaudotShift::Keep, 0),       // !
+    BaudotChar(BaudotShift::FIGS, 0b10001), // "
+    BaudotChar(BaudotShift::FIGS, 0b00101), // #
+    BaudotChar(BaudotShift::FIGS, 0b10010), // $
+    BaudotChar(BaudotShift::Keep, 0),       // %
+    BaudotChar(BaudotShift::FIGS, 0b01011), // &
+    BaudotChar(BaudotShift::FIGS, 0b11010), // '
+    BaudotChar(BaudotShift::FIGS, 0b11110), // (
+    BaudotChar(BaudotShift::FIGS, 0b01001), // )
+    BaudotChar(BaudotShift::Keep, 0),       // *
+    BaudotChar(BaudotShift::FIGS, 0b10001), // +
+    BaudotChar(BaudotShift::FIGS, 0b00110), // ,
+    BaudotChar(BaudotShift::FIGS, 0b11000), // -
+    BaudotChar(BaudotShift::FIGS, 0b00111), // .
+    BaudotChar(BaudotShift::FIGS, 0b10111), // /
+    BaudotChar(BaudotShift::FIGS, 0b01101), // 0
+    BaudotChar(BaudotShift::FIGS, 0b11101), // 1
+    BaudotChar(BaudotShift::FIGS, 0b11001), // 2
+    BaudotChar(BaudotShift::FIGS, 0b10000), // 3
+    BaudotChar(BaudotShift::FIGS, 0b01010), // 4
+    BaudotChar(BaudotShift::FIGS, 0b00001), // 5
+    BaudotChar(BaudotShift::FIGS, 0b10101), // 6
+    BaudotChar(BaudotShift::FIGS, 0b11100), // 7
+    BaudotChar(BaudotShift::FIGS, 0b01100), // 8
+    BaudotChar(BaudotShift::FIGS, 0b00011), // 9
+    BaudotChar(BaudotShift::FIGS, 0b01110), // :
+    BaudotChar(BaudotShift::FIGS, 0b01111), // ;
+    BaudotChar(BaudotShift::Keep, 0),       // <
+    BaudotChar(BaudotShift::FIGS, 0b01111), // =
+    BaudotChar(BaudotShift::Keep, 0),       // >
+    BaudotChar(BaudotShift::FIGS, 0b10011), // ?
+    BaudotChar(BaudotShift::Keep, 0),       // @
+    BaudotChar(BaudotShift::LTRS, 0b11000), // A
+    BaudotChar(BaudotShift::LTRS, 0b10011), // B
+    BaudotChar(BaudotShift::LTRS, 0b01110), // C
+    BaudotChar(BaudotShift::LTRS, 0b10010), // D
+    BaudotChar(BaudotShift::LTRS, 0b10000), // E
+    BaudotChar(BaudotShift::LTRS, 0b10110), // F
+    BaudotChar(BaudotShift::LTRS, 0b01011), // G
+    BaudotChar(BaudotShift::LTRS, 0b00101), // H
+    BaudotChar(BaudotShift::LTRS, 0b01100), // I
+    BaudotChar(BaudotShift::LTRS, 0b11010), // J
+    BaudotChar(BaudotShift::LTRS, 0b11110), // K
+    BaudotChar(BaudotShift::LTRS, 0b01001), // L
+    BaudotChar(BaudotShift::LTRS, 0b00111), // M
+    BaudotChar(BaudotShift::LTRS, 0b00110), // N
+    BaudotChar(BaudotShift::LTRS, 0b00011), // O
+    BaudotChar(BaudotShift::LTRS, 0b01101), // P
+    BaudotChar(BaudotShift::LTRS, 0b11101), // Q
+    BaudotChar(BaudotShift::LTRS, 0b01010), // R
+    BaudotChar(BaudotShift::LTRS, 0b10100), // S
+    BaudotChar(BaudotShift::LTRS, 0b00001), // T
+    BaudotChar(BaudotShift::LTRS, 0b11100), // U
+    BaudotChar(BaudotShift::LTRS, 0b01111), // V
+    BaudotChar(BaudotShift::LTRS, 0b11001), // W
+    BaudotChar(BaudotShift::LTRS, 0b10111), // X
+    BaudotChar(BaudotShift::LTRS, 0b10101), // Y
+    BaudotChar(BaudotShift::LTRS, 0b10001), // Z
+    BaudotChar(BaudotShift::Keep, 0),       // [
+    BaudotChar(BaudotShift::Keep, 0),       // \
+    BaudotChar(BaudotShift::Keep, 0),       // ]
+    BaudotChar(BaudotShift::Keep, 0),       // ^
+    BaudotChar(BaudotShift::FIGS, 0b11000), // _
+    BaudotChar(BaudotShift::Keep, 0),       // `
+    BaudotChar(BaudotShift::LTRS, 0b11000), // a
+    BaudotChar(BaudotShift::LTRS, 0b10011), // b
+    BaudotChar(BaudotShift::LTRS, 0b01110), // c
+    BaudotChar(BaudotShift::LTRS, 0b10010), // d
+    BaudotChar(BaudotShift::LTRS, 0b10000), // e
+    BaudotChar(BaudotShift::LTRS, 0b10110), // f
+    BaudotChar(BaudotShift::LTRS, 0b01011), // g
+    BaudotChar(BaudotShift::LTRS, 0b00101), // h
+    BaudotChar(BaudotShift::LTRS, 0b01100), // i
+    BaudotChar(BaudotShift::LTRS, 0b11010), // j
+    BaudotChar(BaudotShift::LTRS, 0b11110), // k
+    BaudotChar(BaudotShift::LTRS, 0b01001), // l
+    BaudotChar(BaudotShift::LTRS, 0b00111), // m
+    BaudotChar(BaudotShift::LTRS, 0b00110), // n
+    BaudotChar(BaudotShift::LTRS, 0b00011), // o
+    BaudotChar(BaudotShift::LTRS, 0b01101), // p
+    BaudotChar(BaudotShift::LTRS, 0b11101), // q
+    BaudotChar(BaudotShift::LTRS, 0b01010), // r
+    BaudotChar(BaudotShift::LTRS, 0b10100), // s
+    BaudotChar(BaudotShift::LTRS, 0b00001), // t
+    BaudotChar(BaudotShift::LTRS, 0b11100), // u
+    BaudotChar(BaudotShift::LTRS, 0b01111), // v
+    BaudotChar(BaudotShift::LTRS, 0b11001), // w
+    BaudotChar(BaudotShift::LTRS, 0b10111), // x
+    BaudotChar(BaudotShift::LTRS, 0b10101), // y
+    BaudotChar(BaudotShift::LTRS, 0b10001), // z
+    BaudotChar(BaudotShift::Keep, 0),       // {
+    BaudotChar(BaudotShift::Keep, 0),       // |
+    BaudotChar(BaudotShift::Keep, 0),       // }
+    BaudotChar(BaudotShift::Keep, 0),       // ~
+    BaudotChar(BaudotShift::LTRS, 0b11111), // delete
+    BaudotChar(BaudotShift::Keep, 0),       // --- rest is unused ---
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
+    BaudotChar(BaudotShift::Keep, 0),
 ];
 
 // baudot code as defined here: https://en.wikipedia.org/wiki/Baudot_code#ITA_2_and_US-TTY
@@ -299,10 +299,11 @@ const BAUDOT_TO_ASCII: [[(u8, BaudotShift); 2]; 32] = [
 ];
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaudotShift {
     LTRS = 0,
     FIGS = 1,
+    Keep = 255,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -312,7 +313,7 @@ impl BaudotChar {
     pub fn to_ascii(self) -> (u8, BaudotShift) {
         BAUDOT_TO_ASCII[self.0 as usize][self.1 as usize]
     }
-    pub fn from_ascii(ch: u8) -> Option<Self> {
+    pub fn from_ascii(ch: u8) -> Self {
         ASCII_TO_BAUDOT[ch as usize]
     }
 }
@@ -345,19 +346,21 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         }
     }
 
-    pub fn read(&mut self) -> Option<u8> {
+    pub fn poll_read(&mut self) -> Option<u8> {
         let state = self.input.is_high().unwrap();
         self.read_buf |= (state as u8) << 4 - self.read_buf_len;
         self.read_buf_len += 1;
         if self.read_buf_len == 5 {
             let char = BAUDOT_TO_ASCII[self.read_buf as usize][self.current_shift as usize];
-            self.current_shift = char.1;
+            if char.1 != BaudotShift::Keep {
+                self.current_shift = char.1;
+            }
             return Some(char.0);
         }
         None
     }
 
-    pub fn write(&mut self) {
+    pub fn poll_write(&mut self) {
         if self.write_buf_len == 0 {
             return;
         }
@@ -372,13 +375,12 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         }
     }
 
-    pub fn append_to_buf(&mut self, char: u8) {
+    pub fn queue_write(&mut self, char: u8) {
         if self.write_buf_len == WRITE_BUF_LENGTH {
             return;
         }
-        let Some(char) = BaudotChar::from_ascii(char) else {
-            return;
-        };
+        let char = BaudotChar::from_ascii(char);
+
         match (self.current_shift, char.0) {
             (BaudotShift::LTRS, BaudotShift::FIGS) => {
                 if self.write_buf_len + 1 >= WRITE_BUF_LENGTH {
