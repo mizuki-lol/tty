@@ -17,6 +17,12 @@ use rp2040_hal::{
 use rp_pico::hal::fugit::{ExtU32, Rate, RateExtU32};
 use rp_pico::{entry, hal};
 
+enum LineState {
+    Empty,
+    Writing,
+    Reading,
+}
+
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
@@ -68,9 +74,9 @@ fn main() -> ! {
             alarm.schedule(BAUD_RATE.into_duration()).unwrap();
             stream.poll_write();
             let (current_loop_state, read) = stream.poll_read();
-            led.set_state(current_loop_state.into()).unwrap();
+            _ = led.set_state(current_loop_state.into());
             if let Some(read) = read {
-                _ = uart.write_raw(&[read]); // don't handle errors
+                _ = uart.write_raw(&[read]);
             }
         }
         let mut buf = [0; 32]; // this is enough to hold the entire pico uart read buffer
@@ -80,9 +86,7 @@ fn main() -> ! {
             Err(_) => continue, // silently continue on errors, (maybe fixme)
         };
         let (str, len) = translate(buf, nread);
-        for i in 0..len {
-            stream.queue_write(str[i]);
-        }
+        str[0..len].iter().for_each(|&c| stream.queue_write(c));
     }
 }
 

@@ -366,7 +366,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         }
         let c = self.write_buf[0];
         let state = c.1 >> 4 - self.write_buf_char_pos & 1 == 1;
-        self.out.set_state(state.into()).unwrap();
+        _ = self.out.set_state(state.into());
         self.write_buf_char_pos += 1;
         if self.write_buf_char_pos == 5 {
             self.current_shift = c.0;
