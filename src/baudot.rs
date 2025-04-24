@@ -392,7 +392,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
 
     pub fn poll_write(&mut self) -> Option<MicrosDurationU32> {
         if self.write_buf_len == 0 {
-            _ = self.out.set_low();
+            _ = self.out.set_high();
             return None;
         }
         if self.line_state == Reading {

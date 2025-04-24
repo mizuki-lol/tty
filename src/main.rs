@@ -5,16 +5,20 @@ mod baudot;
 
 use baudot::BaudotStream;
 use embedded_hal::digital::OutputPin;
-use panic_halt as _;
+// use panic_halt as _;
+use core::panic::PanicInfo;
 use rp2040_hal::{
     fugit::MicrosDurationU32,
+    gpio::{bank0::Gpio10, FunctionSioOutput, Pin, PullDown},
     pac,
     timer::Alarm,
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
     Clock, Sio, Timer,
 };
-use rp_pico::hal::fugit::{ExtU32, Rate, RateExtU32};
+use rp_pico::hal::fugit::{ExtU32, RateExtU32};
 use rp_pico::{entry, hal};
+
+static mut ERR: Option<Pin<Gpio10, FunctionSioOutput, PullDown>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -41,7 +45,11 @@ fn main() -> ! {
 
     let uart_pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
     let mut current_loop_write = pins.gpio15.into_push_pull_output();
-    let current_loop_read = pins.gpio9.into_pull_down_input();
+    let current_loop_read = pins.gpio13.into_pull_down_input();
+    let err_pin = pins.gpio10.into_push_pull_output();
+    unsafe {
+        ERR = Some(err_pin);
+    }
     let mut led = pins.gpio25.into_push_pull_output();
 
     let uart = UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
@@ -58,7 +66,7 @@ fn main() -> ! {
     let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
     let mut alarm = timer.alarm_0().unwrap();
     alarm.disable_interrupt();
-    alarm.schedule(1.millis()).unwrap();
+    alarm.schedule(10.millis()).unwrap();
 
     let mut stream = BaudotStream::new(current_loop_read, current_loop_write);
 
@@ -109,4 +117,12 @@ fn translate(string: [u8; 32], strlen: usize) -> ([u8; 64], usize) {
         }
     }
     (output, strlen + offset)
+}
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    if let Some(mut e) = unsafe { ERR.take() } {
+        _ = e.set_high();
+    }
+    loop {}
 }
