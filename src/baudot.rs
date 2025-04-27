@@ -327,20 +327,20 @@ impl BaudotChar {
 }
 
 pub struct BaudotStream<IN: PinId, OUT: PinId> {
-    pub current_shift: BaudotShift,
-    pub input: Pin<IN, FunctionSioInput, PullDown>,
-    pub out: Pin<OUT, FunctionSioOutput, PullDown>,
+    current_shift: BaudotShift,
+    input: Pin<IN, FunctionSioInput, PullDown>,
+    out: Pin<OUT, FunctionSioOutput, PullDown>,
 
-    pub reading: bool,
-    pub read_buf: u8,
-    pub read_buf_len: u8,
+    reading: bool,
+    read_buf: u8,
+    read_buf_len: u8,
 
-    pub writing: bool,
-    pub write_buf: [u8; WRITE_BUF_LENGTH],
-    pub write_buf_char_pos: u8,
-    pub write_buf_len: usize,
+    writing: bool,
+    write_buf: [u8; WRITE_BUF_LENGTH],
+    write_buf_char_pos: u8,
+    write_buf_len: usize,
     write_buf_end_shift: BaudotShift,
-    pub start_bit_written: bool,
+    start_bit_written: bool,
 }
 
 impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
