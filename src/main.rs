@@ -4,19 +4,21 @@
 mod baudot;
 
 use baudot::BaudotStream;
-use embedded_hal::digital::OutputPin;
-// use panic_halt as _;
+use core::fmt::Write;
 use core::panic::PanicInfo;
+use embedded_hal::digital::OutputPin;
 use rp2040_hal::{
     fugit::MicrosDurationU32,
     gpio::{bank0::Gpio10, FunctionSioOutput, Pin, PullDown},
-    pac,
     timer::Alarm,
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
     Clock, Sio, Timer,
 };
-use rp_pico::hal::fugit::{ExtU32, RateExtU32};
-use rp_pico::{entry, hal};
+use rp_pico::{
+    entry, hal,
+    hal::fugit::{ExtU32, RateExtU32},
+    pac,
+};
 
 static mut ERR: Option<Pin<Gpio10, FunctionSioOutput, PullDown>> = None;
 
@@ -52,48 +54,57 @@ fn main() -> ! {
     }
     let mut led = pins.gpio25.into_push_pull_output();
 
-    let uart = UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
+    let mut uart = UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
         .enable(
             UartConfig::new(300.Hz(), DataBits::Eight, None, StopBits::One),
             clocks.peripheral_clock.freq(),
         )
         .unwrap();
 
-    uart.write_full_blocking(b"Hello World!\r\n");
+    uart.write_full_blocking(b"tty start\r\n");
 
     current_loop_write.set_high().unwrap();
 
     let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
-    let mut alarm = timer.alarm_0().unwrap();
-    alarm.disable_interrupt();
-    alarm.schedule(10.millis()).unwrap();
+    let mut read_alarm = timer.alarm_0().unwrap();
+    let mut write_alarm = timer.alarm_1().unwrap();
+    read_alarm.disable_interrupt();
+    write_alarm.disable_interrupt();
+    read_alarm.schedule(3.millis()).unwrap();
+    write_alarm.schedule(3.millis()).unwrap();
 
     let mut stream = BaudotStream::new(current_loop_read, current_loop_write);
 
     loop {
-        if alarm.finished() {
-            let schedule1 = stream.poll_write();
-            let (current_loop_state, read, schedule2) = stream.poll_read();
+        if read_alarm.finished() {
+            let (current_loop_state, read, sched) = stream.poll_read();
             _ = led.set_state(current_loop_state.into());
             if let Some(read) = read {
                 _ = uart.write_raw(&[read]);
             }
-            alarm
-                .schedule(match (schedule1, schedule2) {
-                    (Some(s1), Some(s2)) => s1.max(s2),
-                    (Some(s), None) | (None, Some(s)) => s,
-                    (None, None) => MicrosDurationU32::millis(1),
-                })
+            read_alarm
+                .schedule(sched.unwrap_or(MicrosDurationU32::millis(3)))
+                .unwrap();
+        }
+        if write_alarm.finished() {
+            let sched = stream.poll_write();
+            write_alarm
+                .schedule(sched.unwrap_or(MicrosDurationU32::millis(3)))
                 .unwrap();
         }
         let mut buf = [0; 32]; // this is enough to hold the entire pico uart read buffer
         let nread = match uart.read_raw(&mut buf) {
-            Ok(0) => continue, // continue on empty reads
+            Ok(0) | Err(nb::Error::WouldBlock) => continue, // continue on empty reads
             Ok(n) => n,
-            Err(_) => continue, // silently continue on errors, (maybe fixme)
+            Err(e) => {
+                _ = write!(uart, "{e:?}");
+                continue;
+            }
         };
         let (str, len) = translate(buf, nread);
-        str[0..len].iter().for_each(|&c| stream.queue_write(c));
+        str[0..len].iter().for_each(|&c| {
+            stream.queue_write(c);
+        });
     }
 }
 

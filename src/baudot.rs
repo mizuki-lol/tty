@@ -3,142 +3,141 @@ use rp2040_hal::{
     fugit::MicrosDurationU32,
     gpio::{FunctionSioInput, FunctionSioOutput, Pin, PinId, PullDown},
 };
-use LineState::*;
 
 const WRITE_BUF_LENGTH: usize = 1024;
 const BAUD_RATE: MicrosDurationU32 = MicrosDurationU32::millis(22);
-const STOP_BIT_DURATION: MicrosDurationU32 = MicrosDurationU32::millis(32);
 
+#[allow(clippy::unusual_byte_groupings)]
 const ASCII_TO_BAUDOT: [BaudotChar; 256] = [
-    BaudotChar(BaudotShift::Keep, 0),       // null
-    BaudotChar(BaudotShift::Keep, 0),       // start of heading
-    BaudotChar(BaudotShift::Keep, 0),       // start of text
-    BaudotChar(BaudotShift::Keep, 0),       // end of text
-    BaudotChar(BaudotShift::Keep, 0),       // end of transmision
-    BaudotChar(BaudotShift::FIGS, 0b10010), // enquiry
-    BaudotChar(BaudotShift::Keep, 0),       // acknowledge
-    BaudotChar(BaudotShift::FIGS, 0b11010), // bell
-    BaudotChar(BaudotShift::Keep, 0),       // backspace
-    BaudotChar(BaudotShift::Keep, 0),       // tab
-    BaudotChar(BaudotShift::Keep, 0b00010), // new line
-    BaudotChar(BaudotShift::Keep, 0),       // vertical tab
-    BaudotChar(BaudotShift::Keep, 0),       // form feed
-    BaudotChar(BaudotShift::Keep, 0b01000), // carriage return
-    BaudotChar(BaudotShift::Keep, 0),       // shift out
-    BaudotChar(BaudotShift::Keep, 0),       // shift in
-    BaudotChar(BaudotShift::Keep, 0),       // data link escape
-    BaudotChar(BaudotShift::Keep, 0),       // device control 1
-    BaudotChar(BaudotShift::Keep, 0),       // device control 2
-    BaudotChar(BaudotShift::Keep, 0),       // device control 3
-    BaudotChar(BaudotShift::Keep, 0),       // device control 4
-    BaudotChar(BaudotShift::Keep, 0),       // negative acknowledge
-    BaudotChar(BaudotShift::Keep, 0),       // synchronous idle
-    BaudotChar(BaudotShift::Keep, 0),       // end of transmission
-    BaudotChar(BaudotShift::Keep, 0),       // cancel
-    BaudotChar(BaudotShift::Keep, 0),       // end of medium
-    BaudotChar(BaudotShift::Keep, 0),       // substitute
-    BaudotChar(BaudotShift::Keep, 0),       // escape
-    BaudotChar(BaudotShift::Keep, 0),       // file separator
-    BaudotChar(BaudotShift::Keep, 0),       // group separator
-    BaudotChar(BaudotShift::Keep, 0),       // record separator
-    BaudotChar(BaudotShift::Keep, 0),       // unit separator
-    BaudotChar(BaudotShift::Keep, 0),       // space
-    BaudotChar(BaudotShift::Keep, 0),       // !
-    BaudotChar(BaudotShift::FIGS, 0b10001), // "
-    BaudotChar(BaudotShift::FIGS, 0b00101), // #
-    BaudotChar(BaudotShift::FIGS, 0b10010), // $
-    BaudotChar(BaudotShift::Keep, 0),       // %
-    BaudotChar(BaudotShift::FIGS, 0b01011), // &
-    BaudotChar(BaudotShift::FIGS, 0b11010), // '
-    BaudotChar(BaudotShift::FIGS, 0b11110), // (
-    BaudotChar(BaudotShift::FIGS, 0b01001), // )
-    BaudotChar(BaudotShift::Keep, 0),       // *
-    BaudotChar(BaudotShift::FIGS, 0b10001), // +
-    BaudotChar(BaudotShift::FIGS, 0b00110), // ,
-    BaudotChar(BaudotShift::FIGS, 0b11000), // -
-    BaudotChar(BaudotShift::FIGS, 0b00111), // .
-    BaudotChar(BaudotShift::FIGS, 0b10111), // /
-    BaudotChar(BaudotShift::FIGS, 0b01101), // 0
-    BaudotChar(BaudotShift::FIGS, 0b11101), // 1
-    BaudotChar(BaudotShift::FIGS, 0b11001), // 2
-    BaudotChar(BaudotShift::FIGS, 0b10000), // 3
-    BaudotChar(BaudotShift::FIGS, 0b01010), // 4
-    BaudotChar(BaudotShift::FIGS, 0b00001), // 5
-    BaudotChar(BaudotShift::FIGS, 0b10101), // 6
-    BaudotChar(BaudotShift::FIGS, 0b11100), // 7
-    BaudotChar(BaudotShift::FIGS, 0b01100), // 8
-    BaudotChar(BaudotShift::FIGS, 0b00011), // 9
-    BaudotChar(BaudotShift::FIGS, 0b01110), // :
-    BaudotChar(BaudotShift::FIGS, 0b01111), // ;
-    BaudotChar(BaudotShift::Keep, 0),       // <
-    BaudotChar(BaudotShift::FIGS, 0b01111), // =
-    BaudotChar(BaudotShift::Keep, 0),       // >
-    BaudotChar(BaudotShift::FIGS, 0b10011), // ?
-    BaudotChar(BaudotShift::Keep, 0),       // @
-    BaudotChar(BaudotShift::LTRS, 0b11000), // A
-    BaudotChar(BaudotShift::LTRS, 0b10011), // B
-    BaudotChar(BaudotShift::LTRS, 0b01110), // C
-    BaudotChar(BaudotShift::LTRS, 0b10010), // D
-    BaudotChar(BaudotShift::LTRS, 0b10000), // E
-    BaudotChar(BaudotShift::LTRS, 0b10110), // F
-    BaudotChar(BaudotShift::LTRS, 0b01011), // G
-    BaudotChar(BaudotShift::LTRS, 0b00101), // H
-    BaudotChar(BaudotShift::LTRS, 0b01100), // I
-    BaudotChar(BaudotShift::LTRS, 0b11010), // J
-    BaudotChar(BaudotShift::LTRS, 0b11110), // K
-    BaudotChar(BaudotShift::LTRS, 0b01001), // L
-    BaudotChar(BaudotShift::LTRS, 0b00111), // M
-    BaudotChar(BaudotShift::LTRS, 0b00110), // N
-    BaudotChar(BaudotShift::LTRS, 0b00011), // O
-    BaudotChar(BaudotShift::LTRS, 0b01101), // P
-    BaudotChar(BaudotShift::LTRS, 0b11101), // Q
-    BaudotChar(BaudotShift::LTRS, 0b01010), // R
-    BaudotChar(BaudotShift::LTRS, 0b10100), // S
-    BaudotChar(BaudotShift::LTRS, 0b00001), // T
-    BaudotChar(BaudotShift::LTRS, 0b11100), // U
-    BaudotChar(BaudotShift::LTRS, 0b01111), // V
-    BaudotChar(BaudotShift::LTRS, 0b11001), // W
-    BaudotChar(BaudotShift::LTRS, 0b10111), // X
-    BaudotChar(BaudotShift::LTRS, 0b10101), // Y
-    BaudotChar(BaudotShift::LTRS, 0b10001), // Z
-    BaudotChar(BaudotShift::Keep, 0),       // [
-    BaudotChar(BaudotShift::Keep, 0),       // \
-    BaudotChar(BaudotShift::Keep, 0),       // ]
-    BaudotChar(BaudotShift::Keep, 0),       // ^
-    BaudotChar(BaudotShift::FIGS, 0b11000), // _
-    BaudotChar(BaudotShift::Keep, 0),       // `
-    BaudotChar(BaudotShift::LTRS, 0b11000), // a
-    BaudotChar(BaudotShift::LTRS, 0b10011), // b
-    BaudotChar(BaudotShift::LTRS, 0b01110), // c
-    BaudotChar(BaudotShift::LTRS, 0b10010), // d
-    BaudotChar(BaudotShift::LTRS, 0b10000), // e
-    BaudotChar(BaudotShift::LTRS, 0b10110), // f
-    BaudotChar(BaudotShift::LTRS, 0b01011), // g
-    BaudotChar(BaudotShift::LTRS, 0b00101), // h
-    BaudotChar(BaudotShift::LTRS, 0b01100), // i
-    BaudotChar(BaudotShift::LTRS, 0b11010), // j
-    BaudotChar(BaudotShift::LTRS, 0b11110), // k
-    BaudotChar(BaudotShift::LTRS, 0b01001), // l
-    BaudotChar(BaudotShift::LTRS, 0b00111), // m
-    BaudotChar(BaudotShift::LTRS, 0b00110), // n
-    BaudotChar(BaudotShift::LTRS, 0b00011), // o
-    BaudotChar(BaudotShift::LTRS, 0b01101), // p
-    BaudotChar(BaudotShift::LTRS, 0b11101), // q
-    BaudotChar(BaudotShift::LTRS, 0b01010), // r
-    BaudotChar(BaudotShift::LTRS, 0b10100), // s
-    BaudotChar(BaudotShift::LTRS, 0b00001), // t
-    BaudotChar(BaudotShift::LTRS, 0b11100), // u
-    BaudotChar(BaudotShift::LTRS, 0b01111), // v
-    BaudotChar(BaudotShift::LTRS, 0b11001), // w
-    BaudotChar(BaudotShift::LTRS, 0b10111), // x
-    BaudotChar(BaudotShift::LTRS, 0b10101), // y
-    BaudotChar(BaudotShift::LTRS, 0b10001), // z
-    BaudotChar(BaudotShift::Keep, 0),       // {
-    BaudotChar(BaudotShift::Keep, 0),       // |
-    BaudotChar(BaudotShift::Keep, 0),       // }
-    BaudotChar(BaudotShift::Keep, 0),       // ~
-    BaudotChar(BaudotShift::LTRS, 0b11111), // delete
-    BaudotChar(BaudotShift::Keep, 0),       // --- rest is unused ---
+    BaudotChar(BaudotShift::Keep, 0),        // null
+    BaudotChar(BaudotShift::Keep, 0),        // start of heading
+    BaudotChar(BaudotShift::Keep, 0),        // start of text
+    BaudotChar(BaudotShift::Keep, 0),        // end of text
+    BaudotChar(BaudotShift::Keep, 0),        // end of transmision
+    BaudotChar(BaudotShift::Figs, 0b10_010), // enquiry
+    BaudotChar(BaudotShift::Keep, 0),        // acknowledge
+    BaudotChar(BaudotShift::Figs, 0b010_11), // bell
+    BaudotChar(BaudotShift::Keep, 0),        // backspace
+    BaudotChar(BaudotShift::Keep, 0),        // tab
+    BaudotChar(BaudotShift::Keep, 0b000_10), // new line
+    BaudotChar(BaudotShift::Keep, 0),        // vertical tab
+    BaudotChar(BaudotShift::Keep, 0),        // form feed
+    BaudotChar(BaudotShift::Keep, 0b010_00), // carriage return
+    BaudotChar(BaudotShift::Keep, 0),        // shift out
+    BaudotChar(BaudotShift::Keep, 0),        // shift in
+    BaudotChar(BaudotShift::Keep, 0),        // data link escape
+    BaudotChar(BaudotShift::Keep, 0),        // device control 1
+    BaudotChar(BaudotShift::Keep, 0),        // device control 2
+    BaudotChar(BaudotShift::Keep, 0),        // device control 3
+    BaudotChar(BaudotShift::Keep, 0),        // device control 4
+    BaudotChar(BaudotShift::Keep, 0),        // negative acknowledge
+    BaudotChar(BaudotShift::Keep, 0),        // synchronous idle
+    BaudotChar(BaudotShift::Keep, 0),        // end of transmission
+    BaudotChar(BaudotShift::Keep, 0),        // cancel
+    BaudotChar(BaudotShift::Keep, 0),        // end of medium
+    BaudotChar(BaudotShift::Keep, 0),        // substitute
+    BaudotChar(BaudotShift::Keep, 0),        // escape
+    BaudotChar(BaudotShift::Keep, 0),        // file separator
+    BaudotChar(BaudotShift::Keep, 0),        // group separator
+    BaudotChar(BaudotShift::Keep, 0),        // record separator
+    BaudotChar(BaudotShift::Keep, 0),        // unit separator
+    BaudotChar(BaudotShift::Keep, 0b001_00), // space
+    BaudotChar(BaudotShift::Keep, 0),        // !
+    BaudotChar(BaudotShift::Figs, 0b100_01), // "
+    BaudotChar(BaudotShift::Figs, 0b101_00), // #
+    BaudotChar(BaudotShift::Figs, 0b010_01), // $
+    BaudotChar(BaudotShift::Keep, 0),        // %
+    BaudotChar(BaudotShift::Figs, 0b110_10), // &
+    BaudotChar(BaudotShift::Figs, 0b010_11), // '
+    BaudotChar(BaudotShift::Figs, 0b011_11), // (
+    BaudotChar(BaudotShift::Figs, 0b100_10), // )
+    BaudotChar(BaudotShift::Keep, 0),        // *
+    BaudotChar(BaudotShift::Figs, 0b100_01), // +
+    BaudotChar(BaudotShift::Figs, 0b011_00), // ,
+    BaudotChar(BaudotShift::Figs, 0b000_11), // -
+    BaudotChar(BaudotShift::Figs, 0b111_00), // .
+    BaudotChar(BaudotShift::Figs, 0b111_01), // /
+    BaudotChar(BaudotShift::Figs, 0b101_10), // 0
+    BaudotChar(BaudotShift::Figs, 0b101_11), // 1
+    BaudotChar(BaudotShift::Figs, 0b100_11), // 2
+    BaudotChar(BaudotShift::Figs, 0b000_01), // 3
+    BaudotChar(BaudotShift::Figs, 0b010_10), // 4
+    BaudotChar(BaudotShift::Figs, 0b100_00), // 5
+    BaudotChar(BaudotShift::Figs, 0b101_01), // 6
+    BaudotChar(BaudotShift::Figs, 0b001_11), // 7
+    BaudotChar(BaudotShift::Figs, 0b001_10), // 8
+    BaudotChar(BaudotShift::Figs, 0b110_00), // 9
+    BaudotChar(BaudotShift::Figs, 0b011_10), // :
+    BaudotChar(BaudotShift::Figs, 0b111_10), // ;
+    BaudotChar(BaudotShift::Keep, 0),        // <
+    BaudotChar(BaudotShift::Figs, 0b111_10), // =
+    BaudotChar(BaudotShift::Keep, 0),        // >
+    BaudotChar(BaudotShift::Figs, 0b110_01), // ?
+    BaudotChar(BaudotShift::Keep, 0),        // @
+    BaudotChar(BaudotShift::Ltrs, 0b000_11), // A
+    BaudotChar(BaudotShift::Ltrs, 0b110_01), // B
+    BaudotChar(BaudotShift::Ltrs, 0b011_10), // C
+    BaudotChar(BaudotShift::Ltrs, 0b010_01), // D
+    BaudotChar(BaudotShift::Ltrs, 0b000_01), // E
+    BaudotChar(BaudotShift::Ltrs, 0b011_01), // F
+    BaudotChar(BaudotShift::Ltrs, 0b110_10), // G
+    BaudotChar(BaudotShift::Ltrs, 0b101_00), // H
+    BaudotChar(BaudotShift::Ltrs, 0b001_10), // I
+    BaudotChar(BaudotShift::Ltrs, 0b010_11), // J
+    BaudotChar(BaudotShift::Ltrs, 0b011_11), // K
+    BaudotChar(BaudotShift::Ltrs, 0b100_10), // L
+    BaudotChar(BaudotShift::Ltrs, 0b111_00), // M
+    BaudotChar(BaudotShift::Ltrs, 0b011_00), // N
+    BaudotChar(BaudotShift::Ltrs, 0b110_00), // O
+    BaudotChar(BaudotShift::Ltrs, 0b101_10), // P
+    BaudotChar(BaudotShift::Ltrs, 0b101_11), // Q
+    BaudotChar(BaudotShift::Ltrs, 0b010_10), // R
+    BaudotChar(BaudotShift::Ltrs, 0b001_01), // S
+    BaudotChar(BaudotShift::Ltrs, 0b100_00), // T
+    BaudotChar(BaudotShift::Ltrs, 0b001_11), // U
+    BaudotChar(BaudotShift::Ltrs, 0b111_10), // V
+    BaudotChar(BaudotShift::Ltrs, 0b100_11), // W
+    BaudotChar(BaudotShift::Ltrs, 0b111_01), // X
+    BaudotChar(BaudotShift::Ltrs, 0b101_01), // Y
+    BaudotChar(BaudotShift::Ltrs, 0b100_01), // Z
+    BaudotChar(BaudotShift::Keep, 0),        // [
+    BaudotChar(BaudotShift::Keep, 0),        // \
+    BaudotChar(BaudotShift::Keep, 0),        // ]
+    BaudotChar(BaudotShift::Keep, 0),        // ^
+    BaudotChar(BaudotShift::Figs, 0b000_11), // _
+    BaudotChar(BaudotShift::Keep, 0),        // `
+    BaudotChar(BaudotShift::Ltrs, 0b000_11), // a
+    BaudotChar(BaudotShift::Ltrs, 0b110_01), // b
+    BaudotChar(BaudotShift::Ltrs, 0b011_10), // c
+    BaudotChar(BaudotShift::Ltrs, 0b010_01), // d
+    BaudotChar(BaudotShift::Ltrs, 0b000_01), // e
+    BaudotChar(BaudotShift::Ltrs, 0b011_01), // f
+    BaudotChar(BaudotShift::Ltrs, 0b110_10), // g
+    BaudotChar(BaudotShift::Ltrs, 0b101_00), // h
+    BaudotChar(BaudotShift::Ltrs, 0b001_10), // i
+    BaudotChar(BaudotShift::Ltrs, 0b010_11), // j
+    BaudotChar(BaudotShift::Ltrs, 0b011_11), // k
+    BaudotChar(BaudotShift::Ltrs, 0b100_10), // l
+    BaudotChar(BaudotShift::Ltrs, 0b111_00), // m
+    BaudotChar(BaudotShift::Ltrs, 0b011_00), // n
+    BaudotChar(BaudotShift::Ltrs, 0b110_00), // o
+    BaudotChar(BaudotShift::Ltrs, 0b101_10), // p
+    BaudotChar(BaudotShift::Ltrs, 0b101_11), // q
+    BaudotChar(BaudotShift::Ltrs, 0b010_10), // r
+    BaudotChar(BaudotShift::Ltrs, 0b001_01), // s
+    BaudotChar(BaudotShift::Ltrs, 0b100_00), // t
+    BaudotChar(BaudotShift::Ltrs, 0b001_11), // u
+    BaudotChar(BaudotShift::Ltrs, 0b111_10), // v
+    BaudotChar(BaudotShift::Ltrs, 0b100_11), // w
+    BaudotChar(BaudotShift::Ltrs, 0b111_01), // x
+    BaudotChar(BaudotShift::Ltrs, 0b101_01), // y
+    BaudotChar(BaudotShift::Ltrs, 0b100_01), // z
+    BaudotChar(BaudotShift::Keep, 0),        // {
+    BaudotChar(BaudotShift::Keep, 0),        // |
+    BaudotChar(BaudotShift::Keep, 0),        // }
+    BaudotChar(BaudotShift::Keep, 0),        // ~
+    BaudotChar(BaudotShift::Ltrs, 0b11_111), // delete
+    BaudotChar(BaudotShift::Keep, 0),        // --- rest is unused ---
     BaudotChar(BaudotShift::Keep, 0),
     BaudotChar(BaudotShift::Keep, 0),
     BaudotChar(BaudotShift::Keep, 0),
@@ -270,78 +269,77 @@ const ASCII_TO_BAUDOT: [BaudotChar; 256] = [
 
 // baudot code as defined here: https://en.wikipedia.org/wiki/Baudot_code#ITA_2_and_US-TTY
 const BAUDOT_TO_ASCII: [[(u8, BaudotShift); 2]; 32] = [
-    [(b'\0', BaudotShift::LTRS), (b'\0', BaudotShift::FIGS)],
-    [(b'E', BaudotShift::LTRS), (b'3', BaudotShift::FIGS)],
-    [(b'\n', BaudotShift::LTRS), (b'\n', BaudotShift::FIGS)],
-    [(b'A', BaudotShift::LTRS), (b'-', BaudotShift::FIGS)],
-    [(b' ', BaudotShift::LTRS), (b' ', BaudotShift::FIGS)],
-    [(b'S', BaudotShift::LTRS), (b'\'', BaudotShift::FIGS)],
-    [(b'I', BaudotShift::LTRS), (b'8', BaudotShift::FIGS)],
-    [(b'U', BaudotShift::LTRS), (b'7', BaudotShift::FIGS)],
-    [(b'\r', BaudotShift::LTRS), (b'\r', BaudotShift::FIGS)],
-    [(b'D', BaudotShift::LTRS), (b'\0', BaudotShift::FIGS)], // null represents ENQ
-    [(b'R', BaudotShift::LTRS), (b'4', BaudotShift::FIGS)],
-    [(b'J', BaudotShift::LTRS), (b'\0', BaudotShift::FIGS)], // null represents BEL
-    [(b'N', BaudotShift::LTRS), (b',', BaudotShift::FIGS)],
-    [(b'F', BaudotShift::LTRS), (b'!', BaudotShift::FIGS)],
-    [(b'C', BaudotShift::LTRS), (b':', BaudotShift::FIGS)],
-    [(b'K', BaudotShift::LTRS), (b'(', BaudotShift::FIGS)],
-    [(b'T', BaudotShift::LTRS), (b'5', BaudotShift::FIGS)],
-    [(b'Z', BaudotShift::LTRS), (b'+', BaudotShift::FIGS)],
-    [(b'L', BaudotShift::LTRS), (b')', BaudotShift::FIGS)],
-    [(b'W', BaudotShift::LTRS), (b'2', BaudotShift::FIGS)],
-    [(b'H', BaudotShift::LTRS), (b'$', BaudotShift::FIGS)], // '$' should be '£', but '£' is not in ascii
-    [(b'Y', BaudotShift::LTRS), (b'6', BaudotShift::FIGS)],
-    [(b'P', BaudotShift::LTRS), (b'0', BaudotShift::FIGS)],
-    [(b'Q', BaudotShift::LTRS), (b'1', BaudotShift::FIGS)],
-    [(b'O', BaudotShift::LTRS), (b'9', BaudotShift::FIGS)],
-    [(b'B', BaudotShift::LTRS), (b'?', BaudotShift::FIGS)],
-    [(b'G', BaudotShift::LTRS), (b'&', BaudotShift::FIGS)],
-    [(b'\0', BaudotShift::FIGS), (b'\0', BaudotShift::FIGS)], // null represents FIGS
-    [(b'M', BaudotShift::LTRS), (b'.', BaudotShift::FIGS)],
-    [(b'X', BaudotShift::LTRS), (b'/', BaudotShift::FIGS)],
-    [(b'V', BaudotShift::LTRS), (b'=', BaudotShift::FIGS)],
-    [(b'\0', BaudotShift::LTRS), (b'\0', BaudotShift::LTRS)], // null represents LTRS/DEL
+    [(b'\0', BaudotShift::Ltrs), (b'\0', BaudotShift::Figs)],
+    [(b'E', BaudotShift::Ltrs), (b'3', BaudotShift::Figs)],
+    [(b'\n', BaudotShift::Ltrs), (b'\n', BaudotShift::Figs)],
+    [(b'A', BaudotShift::Ltrs), (b'-', BaudotShift::Figs)],
+    [(b' ', BaudotShift::Ltrs), (b' ', BaudotShift::Figs)],
+    [(b'S', BaudotShift::Ltrs), (b'\'', BaudotShift::Figs)],
+    [(b'I', BaudotShift::Ltrs), (b'8', BaudotShift::Figs)],
+    [(b'U', BaudotShift::Ltrs), (b'7', BaudotShift::Figs)],
+    [(b'\r', BaudotShift::Ltrs), (b'\r', BaudotShift::Figs)],
+    [(b'D', BaudotShift::Ltrs), (b'\0', BaudotShift::Figs)], // null represents ENQ
+    [(b'R', BaudotShift::Ltrs), (b'4', BaudotShift::Figs)],
+    [(b'J', BaudotShift::Ltrs), (b'\0', BaudotShift::Figs)], // null represents BEL
+    [(b'N', BaudotShift::Ltrs), (b',', BaudotShift::Figs)],
+    [(b'F', BaudotShift::Ltrs), (b'!', BaudotShift::Figs)],
+    [(b'C', BaudotShift::Ltrs), (b':', BaudotShift::Figs)],
+    [(b'K', BaudotShift::Ltrs), (b'(', BaudotShift::Figs)],
+    [(b'T', BaudotShift::Ltrs), (b'5', BaudotShift::Figs)],
+    [(b'Z', BaudotShift::Ltrs), (b'+', BaudotShift::Figs)],
+    [(b'L', BaudotShift::Ltrs), (b')', BaudotShift::Figs)],
+    [(b'W', BaudotShift::Ltrs), (b'2', BaudotShift::Figs)],
+    [(b'H', BaudotShift::Ltrs), (b'$', BaudotShift::Figs)], // '$' should be '£', but '£' is not in ascii
+    [(b'Y', BaudotShift::Ltrs), (b'6', BaudotShift::Figs)],
+    [(b'P', BaudotShift::Ltrs), (b'0', BaudotShift::Figs)],
+    [(b'Q', BaudotShift::Ltrs), (b'1', BaudotShift::Figs)],
+    [(b'O', BaudotShift::Ltrs), (b'9', BaudotShift::Figs)],
+    [(b'B', BaudotShift::Ltrs), (b'?', BaudotShift::Figs)],
+    [(b'G', BaudotShift::Ltrs), (b'&', BaudotShift::Figs)],
+    [(b'\0', BaudotShift::Figs), (b'\0', BaudotShift::Figs)], // null represents FIGS
+    [(b'M', BaudotShift::Ltrs), (b'.', BaudotShift::Figs)],
+    [(b'X', BaudotShift::Ltrs), (b'/', BaudotShift::Figs)],
+    [(b'V', BaudotShift::Ltrs), (b'=', BaudotShift::Figs)],
+    [(b'\0', BaudotShift::Ltrs), (b'\0', BaudotShift::Ltrs)], // null represents LTRS/DEL
 ];
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaudotShift {
-    LTRS = 0,
-    FIGS = 1,
+    Ltrs = 0,
+    Figs = 1,
     Keep = 255,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct BaudotChar(BaudotShift, u8);
+pub struct BaudotChar(pub BaudotShift, pub u8);
 
 impl BaudotChar {
     pub fn to_ascii(self) -> (u8, BaudotShift) {
-        BAUDOT_TO_ASCII[self.0 as usize][self.1 as usize]
+        if self.0 == BaudotShift::Keep {
+            return (0, BaudotShift::Keep);
+        }
+        BAUDOT_TO_ASCII[self.1 as usize][self.0 as usize]
     }
     pub fn from_ascii(ch: u8) -> Self {
         ASCII_TO_BAUDOT[ch as usize]
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LineState {
-    Empty,
-    Writing,
-    Reading,
-}
-
 pub struct BaudotStream<IN: PinId, OUT: PinId> {
-    line_state: LineState,
-    current_shift: BaudotShift,
-    input: Pin<IN, FunctionSioInput, PullDown>,
-    out: Pin<OUT, FunctionSioOutput, PullDown>,
-    read_buf: u8,
-    read_buf_len: u8,
-    write_buf: [BaudotChar; WRITE_BUF_LENGTH],
-    write_buf_char_pos: u8,
-    write_buf_len: usize,
-    start_bit_written: bool,
+    pub current_shift: BaudotShift,
+    pub input: Pin<IN, FunctionSioInput, PullDown>,
+    pub out: Pin<OUT, FunctionSioOutput, PullDown>,
+
+    pub reading: bool,
+    pub read_buf: u8,
+    pub read_buf_len: u8,
+
+    pub writing: bool,
+    pub write_buf: [BaudotChar; WRITE_BUF_LENGTH],
+    pub write_buf_char_pos: u8,
+    pub write_buf_len: usize,
+    pub start_bit_written: bool,
 }
 
 impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
@@ -350,13 +348,16 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         out: Pin<OUT, FunctionSioOutput, PullDown>,
     ) -> Self {
         Self {
-            line_state: Empty,
-            current_shift: BaudotShift::LTRS,
+            current_shift: BaudotShift::Ltrs,
             input,
             out,
+
+            reading: false,
             read_buf: 0,
             read_buf_len: 0,
-            write_buf: [BaudotChar(BaudotShift::LTRS, 0); WRITE_BUF_LENGTH],
+
+            writing: false,
+            write_buf: [BaudotChar(BaudotShift::Ltrs, 0); WRITE_BUF_LENGTH],
             write_buf_char_pos: 0,
             write_buf_len: 0,
             start_bit_written: false,
@@ -365,28 +366,32 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
 
     pub fn poll_read(&mut self) -> (bool, Option<u8>, Option<MicrosDurationU32>) {
         let state = self.input.is_high().unwrap();
-        if self.line_state == Empty {
+
+        if !self.reading {
             // read start bit
-            if state {
-                self.line_state = Reading;
+            if !state {
+                self.reading = true;
                 return (state, None, Some(BAUD_RATE));
             } else {
                 return (state, None, None);
             }
-        } else if self.line_state == Writing && self.start_bit_written {
-            return (state, None, Some(BAUD_RATE));
         }
 
-        self.read_buf |= (state as u8) << 4 - self.read_buf_len;
-        self.read_buf_len += 1;
         if self.read_buf_len == 5 {
-            let char = BAUDOT_TO_ASCII[self.read_buf as usize][self.current_shift as usize];
+            let char = BaudotChar(self.current_shift, self.read_buf).to_ascii();
             if char.1 != BaudotShift::Keep {
                 self.current_shift = char.1;
             }
-            // multiply BAUD_RATE by 1.42 to account for stop bit
-            return (state, Some(char.0), Some((BAUD_RATE * 142) / 100));
+            self.reading = false;
+            self.read_buf = 0;
+            self.read_buf_len = 0;
+            // wait for last stop bit
+            return (state, Some(char.0), Some(BAUD_RATE));
         }
+
+        let bit = if state { 1 } else { 0 };
+        self.read_buf |= bit << self.read_buf_len;
+        self.read_buf_len += 1;
         (state, None, Some(BAUD_RATE))
     }
 
@@ -395,24 +400,31 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             _ = self.out.set_high();
             return None;
         }
-        if self.line_state == Reading {
-            return None;
-        } else if self.line_state == Empty {
+
+        if !self.writing {
             // write start bit
-            self.line_state = Writing;
+            self.writing = true;
+            self.start_bit_written = true;
             _ = self.out.set_low();
-            return Some(STOP_BIT_DURATION);
+            return Some(BAUD_RATE);
         }
-        self.start_bit_written = true;
+
+        if self.write_buf_char_pos == 5 {
+            self.writing = false;
+            self.write_buf.copy_within(1..self.write_buf_len, 0);
+            self.write_buf_len -= 1;
+            self.write_buf_char_pos = 0;
+            self.start_bit_written = false;
+
+            // write stop bit(s)
+            _ = self.out.set_high();
+            return Some((BAUD_RATE * 142) / 100);
+        }
+
         let c = self.write_buf[0];
-        let state = c.1 >> 4 - self.write_buf_char_pos & 1 == 1;
+        let state = c.1 >> self.write_buf_char_pos & 1 == 1;
         _ = self.out.set_state(state.into());
         self.write_buf_char_pos += 1;
-        if self.write_buf_char_pos == 5 {
-            self.current_shift = c.0;
-            self.write_buf.copy_within(1.., 0);
-            self.write_buf_len -= 1;
-        }
         Some(BAUD_RATE)
     }
 
@@ -423,21 +435,26 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         let char = BaudotChar::from_ascii(char);
 
         match (self.current_shift, char.0) {
-            (BaudotShift::LTRS, BaudotShift::FIGS) => {
-                if self.write_buf_len + 1 >= WRITE_BUF_LENGTH {
+            (BaudotShift::Ltrs, BaudotShift::Figs) => {
+                if self.write_buf_len + 1 == WRITE_BUF_LENGTH {
                     return;
                 }
-                self.write_buf[self.write_buf_len] = BaudotChar(BaudotShift::FIGS, 27);
+                self.write_buf[self.write_buf_len] = BaudotChar(BaudotShift::Figs, 27);
                 self.write_buf[self.write_buf_len + 1] = char;
+                self.write_buf_len += 2;
             }
-            (BaudotShift::FIGS, BaudotShift::LTRS) => {
-                if self.write_buf_len + 1 >= WRITE_BUF_LENGTH {
+            (BaudotShift::Figs, BaudotShift::Ltrs) => {
+                if self.write_buf_len + 1 == WRITE_BUF_LENGTH {
                     return;
                 }
-                self.write_buf[self.write_buf_len] = BaudotChar(BaudotShift::LTRS, 31);
+                self.write_buf[self.write_buf_len] = BaudotChar(BaudotShift::Ltrs, 31);
                 self.write_buf[self.write_buf_len + 1] = char;
+                self.write_buf_len += 2;
             }
-            (_, _) => self.write_buf[self.write_buf_len] = char,
+            (_, _) => {
+                self.write_buf[self.write_buf_len] = char;
+                self.write_buf_len += 1;
+            }
         }
     }
 }
