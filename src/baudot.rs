@@ -336,9 +336,10 @@ pub struct BaudotStream<IN: PinId, OUT: PinId> {
     pub read_buf_len: u8,
 
     pub writing: bool,
-    pub write_buf: [BaudotChar; WRITE_BUF_LENGTH],
+    pub write_buf: [u8; WRITE_BUF_LENGTH],
     pub write_buf_char_pos: u8,
     pub write_buf_len: usize,
+    write_buf_end_shift: BaudotShift,
     pub start_bit_written: bool,
 }
 
@@ -357,9 +358,10 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             read_buf_len: 0,
 
             writing: false,
-            write_buf: [BaudotChar(BaudotShift::Ltrs, 0); WRITE_BUF_LENGTH],
+            write_buf: [0; WRITE_BUF_LENGTH],
             write_buf_char_pos: 0,
             write_buf_len: 0,
+            write_buf_end_shift: BaudotShift::Ltrs,
             start_bit_written: false,
         }
     }
@@ -379,14 +381,17 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
 
         if self.read_buf_len == 5 {
             let char = BaudotChar(self.current_shift, self.read_buf).to_ascii();
-            if char.1 != BaudotShift::Keep {
+            let mut ascii = Some(char.0);
+            // don't send anything to uart when changing shift state
+            if char.1 != BaudotShift::Keep && self.current_shift != char.1 {
                 self.current_shift = char.1;
+                ascii = None;
             }
             self.reading = false;
             self.read_buf = 0;
             self.read_buf_len = 0;
             // wait for last stop bit
-            return (state, Some(char.0), Some(BAUD_RATE));
+            return (state, ascii, Some(BAUD_RATE));
         }
 
         let bit = if state { 1 } else { 0 };
@@ -422,7 +427,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         }
 
         let c = self.write_buf[0];
-        let state = c.1 >> self.write_buf_char_pos & 1 == 1;
+        let state = c >> self.write_buf_char_pos & 1 == 1;
         _ = self.out.set_state(state.into());
         self.write_buf_char_pos += 1;
         Some(BAUD_RATE)
@@ -434,25 +439,27 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         }
         let char = BaudotChar::from_ascii(char);
 
-        match (self.current_shift, char.0) {
+        match (self.write_buf_end_shift, char.0) {
             (BaudotShift::Ltrs, BaudotShift::Figs) => {
                 if self.write_buf_len + 1 == WRITE_BUF_LENGTH {
                     return;
                 }
-                self.write_buf[self.write_buf_len] = BaudotChar(BaudotShift::Figs, 27);
-                self.write_buf[self.write_buf_len + 1] = char;
+                self.write_buf[self.write_buf_len] = 27;
+                self.write_buf[self.write_buf_len + 1] = char.1;
                 self.write_buf_len += 2;
+                self.write_buf_end_shift = char.0;
             }
             (BaudotShift::Figs, BaudotShift::Ltrs) => {
                 if self.write_buf_len + 1 == WRITE_BUF_LENGTH {
                     return;
                 }
-                self.write_buf[self.write_buf_len] = BaudotChar(BaudotShift::Ltrs, 31);
-                self.write_buf[self.write_buf_len + 1] = char;
+                self.write_buf[self.write_buf_len] = 31;
+                self.write_buf[self.write_buf_len + 1] = char.1;
                 self.write_buf_len += 2;
+                self.write_buf_end_shift = char.0;
             }
             (_, _) => {
-                self.write_buf[self.write_buf_len] = char;
+                self.write_buf[self.write_buf_len] = char.1;
                 self.write_buf_len += 1;
             }
         }
