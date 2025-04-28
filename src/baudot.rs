@@ -1,5 +1,5 @@
 use embedded_hal::digital::{InputPin, OutputPin};
-use rp2040_hal::{
+use rp_pico::hal::{
     fugit::MicrosDurationU32,
     gpio::{FunctionSioInput, FunctionSioOutput, Pin, PinId, PullDown},
 };

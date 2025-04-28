@@ -4,19 +4,21 @@
 mod baudot;
 
 use baudot::BaudotStream;
+
 use core::fmt::Write;
 use core::panic::PanicInfo;
 use embedded_hal::digital::OutputPin;
-use rp2040_hal::{
-    fugit::MicrosDurationU32,
-    gpio::{bank0::Gpio10, FunctionSioOutput, Pin, PullDown},
-    timer::Alarm,
-    uart::{DataBits, StopBits, UartConfig, UartPeripheral},
-    Clock, Sio, Timer,
-};
 use rp_pico::{
-    entry, hal,
+    entry,
     hal::fugit::{ExtU32, RateExtU32},
+    hal::{
+        self,
+        fugit::MicrosDurationU32,
+        gpio::{bank0::Gpio10, FunctionSioOutput, Pin, PullDown},
+        timer::Alarm,
+        uart::{DataBits, StopBits, UartConfig, UartPeripheral},
+        Clock, Sio, Timer,
+    },
     pac,
 };
 
@@ -38,7 +40,7 @@ fn main() -> ! {
     .ok()
     .unwrap();
     let sio = Sio::new(pac.SIO);
-    let pins = rp2040_hal::gpio::Pins::new(
+    let pins = hal::gpio::Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
         sio.gpio_bank0,
