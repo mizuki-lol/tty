@@ -4,9 +4,24 @@ use rp_pico::hal::{
     gpio::{FunctionSioInput, FunctionSioOutput, Pin, PinId, PullDown},
 };
 
+/// Length of the buffer holding characters meant for writing to the current loop.
 const WRITE_BUF_LENGTH: usize = 1024;
+/// The baud rate of the teletype. Defaults to 60 speed.
 const BAUD_RATE: MicrosDurationU32 = MicrosDurationU32::millis(22);
 
+/// Table for converting ASCII characters to their equivalents in ITA-2.
+///
+/// ```
+/// let baudot = ASCII_TO_BAUDOT[b'a'];
+///
+/// // the character 'a' is in the Figure set.
+/// assert_eq!(baudot.0, BaudotShift::Figs);
+/// // this is the bit representation in ITA-2
+/// assert_eq!(baudot.1, 0b000_11);
+///
+/// let ascii = BAUDOT_TO_ASCII[b.1][b.0];
+/// assert_eq!(ascii.0, b'A');
+/// ```
 #[allow(clippy::unusual_byte_groupings)]
 const ASCII_TO_BAUDOT: [BaudotChar; 256] = [
     BaudotChar(BaudotShift::Keep, 0),        // null
@@ -267,7 +282,12 @@ const ASCII_TO_BAUDOT: [BaudotChar; 256] = [
     BaudotChar(BaudotShift::Keep, 0),
 ];
 
-// baudot code as defined here: https://en.wikipedia.org/wiki/Baudot_code#ITA_2_and_US-TTY
+/// Table for converting characters from ITA-2 to ascii as defined by the table here
+/// https://en.wikipedia.org/wiki/Baudot_code#ITA_2_and_US-TTY.
+/// The first dimension of this array is meant to be indexed with the baudot char and
+/// the second with the current shift state of the teleprinter.
+/// The first value of the touple is the converted character whereas the second is
+/// the next shift state of the teleprinter after printing this char.
 const BAUDOT_TO_ASCII: [[(u8, BaudotShift); 2]; 32] = [
     [(b'\0', BaudotShift::Ltrs), (b'\0', BaudotShift::Figs)],
     [(b'E', BaudotShift::Ltrs), (b'3', BaudotShift::Figs)],
@@ -303,14 +323,19 @@ const BAUDOT_TO_ASCII: [[(u8, BaudotShift); 2]; 32] = [
     [(b'\0', BaudotShift::Ltrs), (b'\0', BaudotShift::Ltrs)], // null represents LTRS/DEL
 ];
 
+/// The shift state of the teleprinter
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaudotShift {
+    /// LTRS
     Ltrs = 0,
+    /// FIGS
     Figs = 1,
+    /// This value says to keep the current state when writing this char to the current loop.
     Keep = 255,
 }
 
+/// An index to the [BAUDOT_TO_ASCII] table.
 #[derive(Debug, Clone, Copy)]
 pub struct BaudotChar(pub BaudotShift, pub u8);
 
@@ -326,6 +351,12 @@ impl BaudotChar {
     }
 }
 
+/// An abstraction over the current loop used for communicating between teletypes.
+///
+/// To write to characters first queue them with [BaudotStream::queue_write] and then
+/// poll the writes with [BaudotStream::poll_write] with delays in between.
+///
+/// Reading is done using the [BaudotStream::poll_read] method.
 pub struct BaudotStream<IN: PinId, OUT: PinId> {
     current_shift: BaudotShift,
     input: Pin<IN, FunctionSioInput, PullDown>,
@@ -366,6 +397,11 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         }
     }
 
+    /// Try reading some data from the current loop.
+    ///
+    /// Returns the state of the current loop, an ascii character if one was
+    /// done reading and a delay when should the next poll happen (if `None` is return
+    /// an another poll may happen as soon as possible).
     pub fn poll_read(&mut self) -> (bool, Option<u8>, Option<MicrosDurationU32>) {
         let state = self.input.is_high().unwrap();
 
@@ -400,6 +436,8 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         (state, None, Some(BAUD_RATE))
     }
 
+    /// Try writing some data to the current loop.
+    /// If a duration is returned you must call the function again after at least that duration.
     pub fn poll_write(&mut self) -> Option<MicrosDurationU32> {
         if self.write_buf_len == 0 {
             _ = self.out.set_high();
@@ -433,6 +471,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         Some(BAUD_RATE)
     }
 
+    /// Queue some data to be written to the current loop.
     pub fn queue_write(&mut self, char: u8) {
         if self.write_buf_len == WRITE_BUF_LENGTH {
             return;
