@@ -375,6 +375,13 @@ pub struct BaudotStream<IN: PinId, OUT: PinId> {
 }
 
 impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
+    /// Creates an abstraction over the logic of switching the current loop.
+    /// [input] is a pin that is used for reading the state of the current loop.
+    /// A logical 1 correspons to the marking state and 0 to the spacing state.
+    /// [output] is a pin used for for controlling the opening and closing of the
+    /// current loop. A logical 1 means that the loop is closed (current is flowing,
+    /// this is the marking state) and 0 means that the loop should be open (no current
+    /// is flowing, the state is marking).
     pub fn new(
         input: Pin<IN, FunctionSioInput, PullDown>,
         out: Pin<OUT, FunctionSioOutput, PullDown>,
