@@ -6,6 +6,7 @@ mod baudot;
 use baudot::BaudotStream;
 
 use core::fmt::Write;
+use core::mem::MaybeUninit;
 use core::panic::PanicInfo;
 use embedded_hal::digital::OutputPin;
 use rp_pico::{
@@ -22,7 +23,7 @@ use rp_pico::{
     pac,
 };
 
-static mut ERR: Option<Pin<Gpio10, FunctionSioOutput, PullDown>> = None;
+static mut ERR: MaybeUninit<Pin<Gpio10, FunctionSioOutput, PullDown>> = MaybeUninit::uninit();
 
 #[entry]
 fn main() -> ! {
@@ -52,7 +53,7 @@ fn main() -> ! {
     let current_loop_read = pins.gpio13.into_pull_down_input();
     let err_pin = pins.gpio10.into_push_pull_output();
     unsafe {
-        ERR = Some(err_pin);
+        ERR.write(err_pin);
     }
     let mut led = pins.gpio25.into_push_pull_output();
 
@@ -134,8 +135,6 @@ fn translate(string: [u8; 32], strlen: usize) -> ([u8; 64], usize) {
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    if let Some(mut e) = unsafe { ERR.take() } {
-        _ = e.set_high();
-    }
+    _ = unsafe { ERR.assume_init_mut() }.set_high();
     loop {}
 }
