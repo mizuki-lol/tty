@@ -23,6 +23,7 @@ use rp_pico::{
     pac,
 };
 
+/// This pin is set to high when the program panics to sign that there was an error.
 static mut ERR: MaybeUninit<Pin<Gpio10, FunctionSioOutput, PullDown>> = MaybeUninit::uninit();
 
 #[entry]
@@ -78,6 +79,7 @@ fn main() -> ! {
 
     let mut stream = BaudotStream::new(current_loop_read, current_loop_write);
 
+    // main loop
     loop {
         if read_alarm.finished() {
             let (current_loop_state, read, sched) = stream.poll_read();
@@ -95,6 +97,7 @@ fn main() -> ! {
                 .schedule(sched.unwrap_or(MicrosDurationU32::millis(3)))
                 .unwrap();
         }
+
         let mut buf = [0; 32]; // this is enough to hold the entire pico uart read buffer
         let nread = match uart.read_raw(&mut buf) {
             Ok(0) | Err(nb::Error::WouldBlock) => continue, // continue on empty reads
@@ -111,6 +114,7 @@ fn main() -> ! {
     }
 }
 
+/// Translate lone \n sent by the computer to \r\n.
 fn translate(string: [u8; 32], strlen: usize) -> ([u8; 64], usize) {
     let mut output = [0; 64];
     let mut offset = 0;
