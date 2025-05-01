@@ -48,6 +48,7 @@ Zřiďte připojění k sériovému portu pomocí programu jako např. puTTY s n
   * Data bits - 8
   * Stop bits - 1
   * Parity - None
-  * Flow control - None
+  * Flow control - None  
+
 Nyní můžete psát text do puTTY, který se pošle dálnopisu.
 Stejným způsobem se text poslaný dálnopisem zobrazí v puTTY.
