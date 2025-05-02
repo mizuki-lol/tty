@@ -50,8 +50,8 @@ fn main() -> ! {
     );
 
     let uart_pins = (pins.gpio0.into_function(), pins.gpio1.into_function());
-    let mut current_loop_write = pins.gpio15.into_push_pull_output();
-    let current_loop_read = pins.gpio13.into_pull_down_input();
+    let mut current_loop_write = pins.gpio16.into_push_pull_output();
+    let current_loop_read = pins.gpio15.into_pull_down_input();
     let err_pin = pins.gpio10.into_push_pull_output();
     unsafe {
         ERR.write(err_pin);
