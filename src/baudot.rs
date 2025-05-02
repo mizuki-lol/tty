@@ -7,7 +7,7 @@ use rp_pico::hal::{
 /// Length of the buffer holding characters meant for writing to the current loop.
 const WRITE_BUF_LENGTH: usize = 1024;
 /// The baud rate of the teletype. Defaults to 60 speed.
-const BAUD_RATE: MicrosDurationU32 = MicrosDurationU32::millis(22);
+const BAUD_RATE: MicrosDurationU32 = MicrosDurationU32::millis(20);
 
 /// Table for converting ASCII characters to their equivalents in ITA-2.
 ///
