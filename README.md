@@ -12,6 +12,7 @@ K sestavení převodníku je potřeba:
   * Nepájivé pole
   * Dráty pro propojení součástek na nepájivém poli
 
+Zapojte podle obrázku nebo dle schémata ve složce `schematics/`.
 ![Zapojení na nepájivém poli](docs/wiring.jpg)
 ![Zapojení UARTu](docs/UART.jpg)
 
