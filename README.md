@@ -2,16 +2,18 @@
 
 Tento projekt slouží k připojení zařízení pomocí RS-232 přes sériový kabel k dálnopisné síti.
 
-
 ## Konstrukce
 
 K sestavení převodníku je potřeba:
   * Raspberry Pi Pico 1
   * Převodník RS-232 - TTL
   * 2x optočlen
-  * 3x 300 Ohm rezistor
+  * 4x 300 Ohm rezistor
   * Nepájivé pole
   * Dráty pro propojení součástek na nepájivém poli
+
+![Zapojení na nepájivém poli](docs/wiring.jpg)
+![Zapojení UARTu](docs/UART.jpg)
 
 ## Kompilace & flashování
 
