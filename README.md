@@ -1,6 +1,6 @@
-# Převodník RS-232 na ITA-2
+# Převodník ASCII na ITA-2
 
-Tento projekt slouží k připojení zařízení pomocí RS-232 přes sériový kabel k dálnopisné síti.
+Tento projekt slouží k připojení zařízení pomocí sériového kabelu k dálnopisu.
 
 ## Konstrukce
 
