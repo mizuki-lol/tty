@@ -55,6 +55,10 @@ Zřiďte připojění k sériovému portu pomocí programu jako např. puTTY s n
   * Stop bits - 1
   * Parity - None
   * Flow control - None  
+Nezapomeňte také vypnout local-echo.
 
 Nyní můžete psát text do puTTY, který se pošle dálnopisu.
 Stejným způsobem se text poslaný dálnopisem zobrazí v puTTY.
+
+Pokud se rozsvítí LED dioda to znamená že program převodníku spadnul,
+v tomto případě odpojte a znovu připojte převodník od napájení.
