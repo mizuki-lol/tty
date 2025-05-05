@@ -9,10 +9,13 @@ K sestavení převodníku je potřeba:
   * Převodník RS-232 - TTL
   * 2x optočlen
   * 4x 300 Ohm rezistor
+  * 1x LED dioda
   * Nepájivé pole
   * Dráty pro propojení součástek na nepájivém poli
 
 Zapojte podle obrázku nebo dle schémata ve složce `schematics/`.
+Dbejte na orientaci diody a optočlenů, správné zapojení je na obrázku.
+Nezapomeňte připojit napěťovou smyčku dálnopisu k spodním napájecím kontaktům (označené + a -).
 ![Zapojení na nepájivém poli](docs/wiring.jpg)
 ![Zapojení UARTu](docs/UART.jpg)
 
