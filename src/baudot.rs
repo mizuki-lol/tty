@@ -8,6 +8,12 @@ use rp_pico::hal::{
 const WRITE_BUF_LENGTH: usize = 1024;
 /// The baud rate of the teletype. Defaults to 60 speed.
 const BAUD_RATE: MicrosDurationU32 = MicrosDurationU32::millis(20);
+/// Maximum line length
+const LINE_LENGTH: u8 = 40;
+const CRLF: [u8; 2] = [
+    ASCII_TO_BAUDOT[b'\r' as usize].1,
+    ASCII_TO_BAUDOT[b'\n' as usize].1,
+];
 
 /// Table for converting ASCII characters to their equivalents in ITA-2.
 ///
@@ -349,6 +355,31 @@ impl BaudotChar {
     pub fn from_ascii(ch: u8) -> Self {
         ASCII_TO_BAUDOT[ch as usize]
     }
+    /// Checks if this character is a control char (switches the shift state).
+    pub fn is_control(&self) -> bool {
+        self.1 == 27 || self.1 == 31
+    }
+    /// Checks if this is the null character.
+    pub fn is_null(&self) -> bool {
+        self.1 == 0
+    }
+    /// Checks if this character is printable. Printable here means that it
+    /// advances the carriage of the teleprinter, so space is considered printable
+    /// even though no actual character is printed. Both CR and LF are not considered
+    /// printable.
+    pub fn is_printable(&self) -> bool {
+        self.0 == BaudotShift::Ltrs
+            && ((self.1 == 1)
+                || (self.1 > 2 && self.1 < 8)
+                || (self.1 > 8 && self.1 < 27)
+                || (self.1 > 27 && self.1 < 31))
+            || self.0 == BaudotShift::Figs
+                && ((self.1 == 1)
+                    || (self.1 > 2 && self.1 < 8)
+                    || (self.1 == 10)
+                    || (self.1 > 11 && self.1 < 27)
+                    || (self.1 > 27 && self.1 < 31))
+    }
 }
 
 /// An abstraction over the current loop used for communicating between teletypes.
@@ -359,6 +390,7 @@ impl BaudotChar {
 /// Reading is done using the [BaudotStream::poll_read] method.
 pub struct BaudotStream<IN: PinId, OUT: PinId> {
     current_shift: BaudotShift,
+    line_length: u8,
     input: Pin<IN, FunctionSioInput, PullDown>,
     out: Pin<OUT, FunctionSioOutput, PullDown>,
 
@@ -371,6 +403,7 @@ pub struct BaudotStream<IN: PinId, OUT: PinId> {
     write_buf_char_pos: u8,
     write_buf_len: usize,
     write_buf_end_shift: BaudotShift,
+    buffered_crlf: u8,
     start_bit_written: bool,
 }
 
@@ -388,6 +421,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
     ) -> Self {
         Self {
             current_shift: BaudotShift::Ltrs,
+            line_length: 0,
             input,
             out,
 
@@ -400,6 +434,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             write_buf_char_pos: 0,
             write_buf_len: 0,
             write_buf_end_shift: BaudotShift::Ltrs,
+            buffered_crlf: 0,
             start_bit_written: false,
         }
     }
@@ -430,6 +465,11 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
                 self.current_shift = char.1;
                 ascii = None;
             }
+            if char.0 == b'\r' {
+                self.line_length = 0;
+            } else if BaudotChar(self.current_shift, self.read_buf).is_printable() {
+                self.line_length += 1;
+            }
             self.reading = false;
             self.read_buf = 0;
             self.read_buf_len = 0;
@@ -446,9 +486,13 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
     /// Try writing some data to the current loop.
     /// If a duration is returned you must call the function again after at least that duration.
     pub fn poll_write(&mut self) -> Option<MicrosDurationU32> {
-        if self.write_buf_len == 0 {
+        if self.write_buf_len == 0 && self.buffered_crlf == 0 {
             _ = self.out.set_high();
             return None;
+        }
+
+        if self.line_length == LINE_LENGTH {
+            self.buffered_crlf = 2;
         }
 
         if !self.writing {
@@ -461,8 +505,12 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
 
         if self.write_buf_char_pos == 5 {
             self.writing = false;
-            self.write_buf.copy_within(1..self.write_buf_len, 0);
-            self.write_buf_len -= 1;
+            if self.buffered_crlf == 0 {
+                self.write_buf.copy_within(1..self.write_buf_len, 0);
+                self.write_buf_len -= 1;
+            } else {
+                self.buffered_crlf -= 1;
+            }
             self.write_buf_char_pos = 0;
             self.start_bit_written = false;
 
@@ -471,7 +519,11 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             return Some((BAUD_RATE * 142) / 100);
         }
 
-        let c = self.write_buf[0];
+        let c = if self.buffered_crlf == 0 {
+            self.write_buf[0]
+        } else {
+            CRLF[2 - self.buffered_crlf as usize]
+        };
         let state = c >> self.write_buf_char_pos & 1 == 1;
         _ = self.out.set_state(state.into());
         self.write_buf_char_pos += 1;
