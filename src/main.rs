@@ -85,7 +85,9 @@ fn main() -> ! {
             let (current_loop_state, read, sched) = stream.poll_read();
             _ = led.set_state(current_loop_state.into());
             if let Some(read) = read {
-                _ = uart.write_raw(&[read]);
+                if read != 0 {
+                    _ = uart.write_raw(&[read]);
+                }
             }
             read_alarm
                 .schedule(sched.unwrap_or(MicrosDurationU32::millis(3)))

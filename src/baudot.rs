@@ -451,7 +451,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             // read start bit
             if !state {
                 self.reading = true;
-                return (state, None, Some(BAUD_RATE));
+                return (state, None, Some(MicrosDurationU32::millis(30)));
             } else {
                 return (state, None, None);
             }
@@ -474,7 +474,7 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
             self.read_buf = 0;
             self.read_buf_len = 0;
             // wait for last stop bit
-            return (state, ascii, Some(BAUD_RATE));
+            return (state, ascii, Some(MicrosDurationU32::millis(9)));
         }
 
         let bit = if state { 1 } else { 0 };
