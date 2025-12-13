@@ -1,8 +1,8 @@
-use embedded_hal::digital::{InputPin, OutputPin};
-use rp_pico::hal::{
-    fugit::MicrosDurationU32,
-    gpio::{FunctionSioInput, FunctionSioOutput, Pin, PinId, PullDown},
+use embedded_hal::{
+    delay::DelayNs,
+    digital::{InputPin, OutputPin},
 };
+use rp_pico::hal::{fugit::MicrosDurationU32, Timer};
 
 /// Length of the buffer holding characters meant for writing to the current loop.
 const WRITE_BUF_LENGTH: usize = 1024;
@@ -388,11 +388,16 @@ impl BaudotChar {
 /// poll the writes with [BaudotStream::poll_write] with delays in between.
 ///
 /// Reading is done using the [BaudotStream::poll_read] method.
-pub struct BaudotStream<IN: PinId, OUT: PinId> {
+pub struct Teletype<INFWD: InputPin, INREV: InputPin, OUT: OutputPin, CTRL: OutputPin> {
     current_shift: BaudotShift,
     line_length: u8,
-    input: Pin<IN, FunctionSioInput, PullDown>,
-    out: Pin<OUT, FunctionSioOutput, PullDown>,
+    input: INFWD,
+    input_rev: INREV,
+    out: OUT,
+    ctrl: CTRL,
+
+    dialing: bool,
+    connected: bool,
 
     reading: bool,
     read_buf: u8,
@@ -407,23 +412,28 @@ pub struct BaudotStream<IN: PinId, OUT: PinId> {
     start_bit_written: bool,
 }
 
-impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
+impl<INFWD: InputPin, INREV: InputPin, OUT: OutputPin, CTRL: OutputPin>
+    Teletype<INFWD, INREV, OUT, CTRL>
+{
     /// Creates an abstraction over the logic of switching the current loop.
+    // TODO: update docs
     /// [input] is a pin that is used for reading the state of the current loop.
     /// A logical 1 correspons to the marking state and 0 to the spacing state.
     /// [output] is a pin used for for controlling the opening and closing of the
     /// current loop. A logical 1 means that the loop is closed (current is flowing,
     /// this is the marking state) and 0 means that the loop should be open (no current
     /// is flowing, the state is marking).
-    pub fn new(
-        input: Pin<IN, FunctionSioInput, PullDown>,
-        out: Pin<OUT, FunctionSioOutput, PullDown>,
-    ) -> Self {
+    pub fn new(input: INFWD, input_rev: INREV, out: OUT, ctrl: CTRL) -> Self {
         Self {
             current_shift: BaudotShift::Ltrs,
             line_length: 0,
             input,
+            input_rev,
             out,
+            ctrl,
+
+            dialing: false,
+            connected: false,
 
             reading: false,
             read_buf: 0,
@@ -439,12 +449,80 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
         }
     }
 
+    pub fn accept_conn(&mut self, timer: &mut Timer) -> bool {
+        if self.input.is_high().unwrap() {
+            self.ctrl.set_high().unwrap();
+            timer.delay_ms(2000);
+            // Connection falied.
+            if self.input.is_low().unwrap() && self.input_rev.is_high().unwrap() {
+                return false;
+            }
+            self.dialing = false;
+            self.connected = true;
+            return true;
+        }
+        false
+    }
+
+    pub fn dial(&mut self, digit: u8, timer: &mut Timer) {
+        if digit >= 10 || self.connected {
+            return;
+        }
+        // Signal to the telex that we are going to start dialing.
+        if !self.dialing {
+            self.ctrl.set_high().unwrap();
+            loop {
+                if self.input_rev.is_low().unwrap() {
+                    timer.delay_ms(25);
+                    break;
+                }
+                timer.delay_ms(1);
+            }
+            loop {
+                if self.input_rev.is_high().unwrap() {
+                    break;
+                }
+                timer.delay_ms(5);
+            }
+            self.dialing = true;
+            timer.delay_ms(100);
+        }
+        let digit = if digit == 0 { 10 } else { digit };
+
+        self.out.set_low().unwrap();
+        timer.delay_ms(63);
+        // Write pulses of digit.
+        for _ in 0..digit {
+            self.out.set_high().unwrap();
+            timer.delay_ms(37);
+            self.out.set_low().unwrap();
+            timer.delay_ms(63);
+        }
+        timer.delay_ms(240);
+    }
+
+    pub fn is_connected(&mut self) -> bool {
+        if self.input.is_high().unwrap() {
+            self.connected = true;
+            return true;
+        }
+        if self.input_rev.is_high().unwrap() {
+            self.cleanup();
+            self.connected = false;
+            return false;
+        }
+        self.connected
+    }
+
     /// Try reading some data from the current loop.
     ///
     /// Returns the state of the current loop, an ascii character if one was
     /// done reading and a delay when should the next poll happen (if `None` is return
     /// an another poll may happen as soon as possible).
     pub fn poll_read(&mut self) -> (bool, Option<u8>, Option<MicrosDurationU32>) {
+        if !self.connected {
+            panic!();
+        }
         let state = self.input.is_high().unwrap();
 
         if !self.reading {
@@ -486,6 +564,9 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
     /// Try writing some data to the current loop.
     /// If a duration is returned you must call the function again after at least that duration.
     pub fn poll_write(&mut self) -> Option<MicrosDurationU32> {
+        if !self.connected {
+            panic!();
+        }
         if self.write_buf_len == 0 && self.buffered_crlf == 0 {
             _ = self.out.set_high();
             return None;
@@ -561,5 +642,20 @@ impl<IN: PinId, OUT: PinId> BaudotStream<IN, OUT> {
                 self.write_buf_len += 1;
             }
         }
+    }
+
+    fn cleanup(&mut self) {
+        self.current_shift = BaudotShift::Ltrs;
+        self.line_length = 0;
+
+        self.reading = false;
+        self.read_buf = 0;
+        self.read_buf_len = 0;
+        self.writing = false;
+        self.write_buf = [0; WRITE_BUF_LENGTH];
+        self.write_buf_len = 0;
+        self.write_buf_char_pos = 0;
+        self.write_buf_end_shift = BaudotShift::Ltrs;
+        self.start_bit_written = false;
     }
 }
